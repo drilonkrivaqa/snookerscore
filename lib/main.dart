@@ -1,3 +1,5 @@
+import 'dart:math';
+
 import 'package:flutter/material.dart';
 
 void main() => runApp(const SnookerScoreApp());
@@ -148,6 +150,13 @@ class FrameState {
     if (freeBallActive) return "Expected: Free ball (counts as 1), then a color";
     if (inColorsClearance) return "Expected: ${nextColorInClearance.name} (colors in order)";
     return expectingRed ? "Expected: Red" : "Expected: Color";
+  }
+
+  int suggestedFoulPoints({Ball? ballOn, Ball? ballInvolved}) {
+    final candidates = [4];
+    if (ballOn != null) candidates.add(ballOn.points);
+    if (ballInvolved != null) candidates.add(ballInvolved.points);
+    return candidates.reduce(max);
   }
 
   void potBall(Ball ball) {
@@ -363,6 +372,8 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
   late final TabController tabs = TabController(length: 2, vsync: this);
 
   bool foulIsMiss = false;
+  Ball foulBallOn = Ball.red;
+  Ball foulBallInvolved = Ball.yellow;
 
   @override
   void dispose() {
@@ -589,6 +600,90 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
                 );
               }).toList(),
             ),
+            const Divider(height: 22),
+            Row(
+              children: [
+                const Icon(Icons.calculate, size: 18),
+                const SizedBox(width: 8),
+                Text(
+                  "Automatic foul calculator",
+                  style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: Colors.grey.shade800),
+                ),
+              ],
+            ),
+            const SizedBox(height: 10),
+            Wrap(
+              spacing: 12,
+              runSpacing: 12,
+              children: [
+                _ballDropdown(
+                  label: "Ball on",
+                  value: foulBallOn,
+                  onChanged: (b) => setState(() => foulBallOn = b!),
+                ),
+                _ballDropdown(
+                  label: "Ball involved",
+                  value: foulBallInvolved,
+                  onChanged: (b) => setState(() => foulBallInvolved = b!),
+                ),
+                ElevatedButton.icon(
+                  onPressed: () {
+                    setState(() {
+                      foulBallOn = state.expectingRed && !state.inColorsClearance
+                          ? Ball.red
+                          : state.inColorsClearance
+                              ? state.nextColorInClearance
+                              : Ball.yellow;
+                    });
+                  },
+                  icon: const Icon(Icons.lightbulb_outline),
+                  label: const Text("Use expected ball on"),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            Builder(builder: (context) {
+              final autoPoints = state.suggestedFoulPoints(ballOn: foulBallOn, ballInvolved: foulBallInvolved);
+              return Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.grey.shade100,
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      "Recommended penalty: $autoPoints points to opponent",
+                      style: const TextStyle(fontWeight: FontWeight.w700),
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      "Uses max(4, ball on, ball involved). Example: knocking the blue off the table = 5 points.",
+                      style: const TextStyle(fontSize: 12, color: Colors.black54, height: 1.25),
+                    ),
+                    const SizedBox(height: 10),
+                    Row(
+                      children: [
+                        ElevatedButton.icon(
+                          onPressed: () => setState(() => state.foul(pointsAwardedToOpponent: autoPoints, isMiss: foulIsMiss)),
+                          icon: const Icon(Icons.playlist_add_check),
+                          label: const Text("Apply recommended foul"),
+                        ),
+                        const SizedBox(width: 10),
+                        Flexible(
+                          child: Text(
+                            "Next expected shot: ${state.expectedText}. Switch turn or request a replay based on your decision.",
+                            style: const TextStyle(fontSize: 12, color: Colors.black54, height: 1.35),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              );
+            }),
             const SizedBox(height: 10),
             SwitchListTile(
               contentPadding: EdgeInsets.zero,
@@ -603,6 +698,39 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
           ],
         ),
       ),
+    );
+  }
+
+  Widget _ballDropdown({required String label, required Ball value, required ValueChanged<Ball?> onChanged}) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text(label, style: const TextStyle(fontSize: 12, color: Colors.black54)),
+        const SizedBox(height: 4),
+        DropdownButton<Ball>(
+          value: value,
+          onChanged: onChanged,
+          items: Ball.values
+              .map(
+                (b) => DropdownMenuItem(
+                  value: b,
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.circle, color: b.color, size: 14),
+                      const SizedBox(width: 6),
+                      Text("${b.name} (${b.points})"),
+                    ],
+                  ),
+                ),
+              )
+              .toList(),
+          underline: const SizedBox.shrink(),
+          style: const TextStyle(color: Colors.black),
+          dropdownColor: Colors.white,
+        ),
+      ],
     );
   }
 
